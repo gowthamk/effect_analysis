@@ -1,0 +1,1 @@
+def foo ( a,b ) a:=b&c; b:=a|d; e:=f-g end

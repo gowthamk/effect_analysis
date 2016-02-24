@@ -1,0 +1,1 @@
+def foo ( a ) if a then assert (a|b) else b:=a end end
