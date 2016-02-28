@@ -17,7 +17,7 @@ module ANormalAST where
                  | Record (Record_t ValExprAtom_t) deriving Show
 
   data Prim_t = Not | And | Or | Geq | Leq | Minus | Plus 
-              | Lt | Gt | Equals deriving Show
+              | Lt | Gt | Equals | Neq deriving Show
 
   data Lambda_t = Lambda_T { lArgs :: [Var_t]
                            , lBody :: Stmt_t} deriving Show

@@ -1,189 +1,218 @@
 -- Parser based on RFGrammar
 
-import System.IO
+module Parser (
+  parse
+) where
 
-import Control.Applicative((<*))
-import Control.Monad (void, liftM)
-import Text.Parsec
-import Text.Parsec.String
-import Text.Parsec.Expr
-import Text.Parsec.Token
-import Text.Parsec.Language
-import Text.Parsec.Char
-import SQLParser.PGSqlParser
-import ANormalAST
+  -- Parsec rule: once a branch accepts a token then alternative
+  -- branches are pruned. No backtracking by default. If needed,
+  -- backtracking needs to be added explicitly via "try" combinator.
+  import System.IO
 
-def :: LanguageDef st
-def = emptyDef{ commentStart = "/*"
-	, commentEnd = "*/"
-	, identStart = letter <|> char '_'
-	, identLetter = alphaNum <|> char '_'
-	, opStart = oneOf "!&><=:|-+.{}()"
-	, opLetter = oneOf "&=|"
-	, reservedOpNames = ["!", "&&", ">", "<", ">=", "<=", "==", "-", "+", 
-                       ":=", "||", "{", "}", "(", ")"]
-	, reservedNames = ["true", "false", "if", "then", "else", "end", 
-      "SQL", "assert", "do", "def", "transaction"]
-	}
+  import Control.Applicative((<*))
+  import Control.Monad (void, liftM)
+  import Control.Exception (throw)
+  import Text.Parsec
+  import Text.Parsec.String
+  import Text.Parsec.Expr
+  import Text.Parsec.Token
+  import Text.Parsec.Language
+  import Text.Parsec.Char
+  import SQLParser.PGSqlParser
+  import ANormalAST
+  import Debug.Trace(trace)
 
-
-TokenParser
-  { identifier = m_identifier
-	, reservedOp = m_reservedOp
-	, reserved = m_reserved
-	, semiSep = m_semiSep
-	, semiSep1 = m_semiSep1
-  , commaSep = m_commaSep
-	, commaSep1 = m_commaSep1
-	, stringLiteral = m_stringLiteral
-	, whiteSpace = m_whiteSpace 
-  , integer = m_integer
-  , parens = m_parens{- Parser a -> Parser a -}
-  , braces = m_braces} = makeTokenParser def
-
-varParser :: Parser Var_t
-varParser = liftM{-( a->b)->Ma->Mb -} Var_T m_identifier
-
-fieldParser :: Parser Field_t
-fieldParser = liftM{-( a->b)->Ma->Mb -} Field_T m_identifier
-
-boolParser :: Parser Bool
-boolParser =  (m_reserved "true" >> return True)
-          <|> (m_reserved "false" >> return False)
-
-fieldAssignmentParser :: Parser (Field_t,ValExprAtom_t)
-fieldAssignmentParser = do
-  fld <- fieldParser
-  _ <- m_reservedOp "="
-  valExpAtom <- valExprAtomParser
-  return (fld,valExpAtom)
+  def :: LanguageDef st
+  def = emptyDef{ commentStart = "/*"
+    , commentEnd = "*/"
+    , identStart = letter <|> char '_'
+    , identLetter = alphaNum <|> char '_'
+    , opStart = oneOf "!&><=:|-+.{}()"
+    , opLetter = oneOf "&=|"
+    , reservedOpNames = ["!", "&&", ">", "<", ">=", "<=", "==", "-", "+", 
+                         ":=", "||", "{", "}", "(", ")"]
+    , reservedNames = ["true", "false", "if", "then", "else", "end", 
+        "SQL", "assert", "do", "def", "transaction"]
+    }
 
 
-recordParser :: Parser (Record_t ValExprAtom_t)
-recordParser = liftM Record_T (m_braces $ m_commaSep1 fieldAssignmentParser)
-  
-  
+  TokenParser
+    { identifier      = m_identifier
+    , reservedOp      = m_reservedOp
+    , reserved        = m_reserved
+    , semi            = m_semi
+    , semiSep         = m_semiSep
+    , semiSep1        = m_semiSep1
+    , commaSep        = m_commaSep
+    , commaSep1       = m_commaSep1
+    , stringLiteral   = m_stringLiteral
+    , whiteSpace      = m_whiteSpace 
+    , integer         = m_integer
+    , parens          = m_parens{- Parser a -> Parser a -}
+    , braces          = m_braces} = makeTokenParser def
 
-valExprAtomParser :: Parser ValExprAtom_t
-valExprAtomParser =  try (m_integer >>= \x -> return $ ConstInt $ fromInteger x)
-                 <|> try (boolParser >>= \x -> return $ ConstBool x)
-                 <|> try (varParser >>= \x -> return $ Var x)
-                 <?> "a ValExprAtom"
+  varParser :: Parser Var_t
+  varParser = liftM{-( a->b)->Ma->Mb -} Var_T m_identifier
 
-valExprParser :: Parser ValExpr_t
-valExprParser =  try (valExprAtomParser >>= \x -> return $ Atom x)
-             <|> try (recordParser >>= \x -> return $ Record x)
-             <?> "a value expression" 
+  fieldParser :: Parser Field_t
+  fieldParser = liftM{-( a->b)->Ma->Mb -} Field_T m_identifier
 
-unOpParser :: Parser Prim_t
-unOpParser = m_reservedOp "!" >> return Not
+  boolParser :: Parser Bool
+  boolParser =  (m_reserved "true" >> return True)
+            <|> (m_reserved "false" >> return False)
 
-binOpParser :: Parser Prim_t
-binOpParser =  try (m_reservedOp "&&" >> return And)
-           <|> try (m_reservedOp "||" >> return Or)
-           <|> try (m_reservedOp "==" >> return Equals)
-           <|> try (m_reservedOp ">" >> return Gt)
-           <|> try (m_reservedOp "<" >> return Lt)
-           <|> try (m_reservedOp ">=" >> return Geq)
-           <|> try (m_reservedOp "<=" >> return Leq)
-           <|> try (m_reservedOp "-" >> return Minus)
-           <|> try (m_reservedOp "+" >> return Plus)
-           <?> "-- this msg should never be displayed --" 
-
-primParser :: Parser Prim_t
-primParser =  try (m_reservedOp "&&" >> return And)
-           <|> try (m_reservedOp "||" >> return Or)
-           <|> try (m_reservedOp "!" >> return Not)
-           <|> try (m_reservedOp "==" >> return Equals)
-           <|> try (m_reservedOp ">" >> return Gt)
-           <|> try (m_reservedOp "<" >> return Lt)
-           <|> try (m_reservedOp ">=" >> return Geq)
-           <|> try (m_reservedOp "<=" >> return Leq)
-           <|> try (m_reservedOp "-" >> return Minus)
-           <|> try (m_reservedOp "+" >> return Plus)
-           <?> "-- this msg should never be displayed --" 
-
-primAppParser :: Parser Expr_t
-primAppParser =  try (do { p <- unOpParser
-                         ; exp <- valExprParser 
-                         ; return $ PrimApp p [exp]})
-             <|> try (do { exp1 <- valExprParser
-                         ; p <- binOpParser
-                         ; exp2 <- valExprParser 
-                         ; return $ PrimApp p [exp1, exp2]})
-
-formalArgsParser :: Parser [Var_t]
-formalArgsParser = m_parens $ m_commaSep varParser
-
-lambdaParser :: Parser Lambda_t
-lambdaParser = do
-  _ <- m_reservedOp "do"
-  args <- formalArgsParser
-  body <- stmtParser
-  _ <- m_reservedOp "end"
-  return $ mkLambda (args,body)
-
-actualArgsParser :: Parser [ValExpr_t]
-actualArgsParser = m_parens $ m_commaSep valExprParser
-
-sqlParser :: Parser SQLStatement
-sqlParser = (m_reserved "SQL" >> m_stringLiteral >>= 
-                \x -> return $ parseSql x)
-
-exprParser :: Parser Expr_t
-exprParser =  try (liftM ValExpr valExprParser )
-          <|> try (do { 
-                      ; x <- valExprAtomParser
-                      ; y <- actualArgsParser
-                      ; return $ App x y})
-          {- <|> try (primAppParser) -}
-          <|> try (do { 
-                      ; p <- primParser
-                      ; y <- actualArgsParser
-                      ; return $ PrimApp p y})
-          <|> try (liftM Lambda lambdaParser)
-          <|> try (liftM SQL sqlParser)
-          <?> "an expression" 
-
-txnStmtParser :: Parser Stmt_t
-txnStmtParser = do
-  m_reserved "transaction"
-  m_reserved "do"
-  stmt <- stmtParser
-  m_reserved "end"
-  return stmt
-
-iteStmtParser :: Parser Stmt_t
-iteStmtParser = do {m_reserved "if"
-		; cond <- m_parens exprParser
-		; m_reserved "then"
-		; ts <- stmtParser
-		; m_reserved "else"
-		; fs <- stmtParser
-		; m_reserved "end"
-		; return $ mkITE (cond,ts,fs)
-		}
-
-assmtStmtParser :: Parser Stmt_t
-assmtStmtParser = do
-  var <- varParser
-  m_reservedOp ":="
-  expr <- exprParser
-  return (var := expr)
-
-assertStmtParser :: Parser Stmt_t
-assertStmtParser = m_reserved "assert" >> 
-                    liftM Assert (m_parens exprParser)
-
-stmtSeqParser :: Parser [Stmt_t]
-stmtSeqParser = m_semiSep1 stmtParser
+  fieldAssignmentParser :: Parser (Field_t,ValExprAtom_t)
+  fieldAssignmentParser = do
+    fld <- fieldParser
+    _ <- m_reservedOp "="
+    valExpAtom <- valExprAtomParser
+    return (fld,valExpAtom)
 
 
-stmtParser :: Parser Stmt_t
-stmtParser =  try txnStmtParser
-          {-<|> try (liftM Expr exprParser) -}
-          <|> try (assmtStmtParser)
-          <|> try (iteStmtParser)
-          <|> try (assertStmtParser)
-          <|> try (liftM Seq stmtSeqParser)
-          <?> "a statement"
+  recordParser :: Parser (Record_t ValExprAtom_t)
+  recordParser = liftM Record_T (m_braces $ m_commaSep1 fieldAssignmentParser)
+    
+    
+  -- No need to "try" any of the rules of valExpAtom, because the
+  -- first token consumed by each rule is unique.
+  valExprAtomParser :: Parser ValExprAtom_t
+  valExprAtomParser =  (m_integer >>= \x -> return $ ConstInt $ fromInteger x)
+                   <|> (boolParser >>= \x -> return $ ConstBool x)
+                   <|> (varParser >>= \x -> return $ Var x)
+                   <?> "a ValExprAtom"
+
+  valExprParser :: Parser ValExpr_t
+  valExprParser =  (valExprAtomParser >>= \x -> return $ Atom x)
+               <|> (recordParser >>= \x -> return $ Record x)
+               <?> "a value expression" 
+
+  -- There is one-to-one correspondence between reservedOp tokens and
+  -- primitive operators. No "try" needed.
+  unOpParser :: Parser Prim_t
+  unOpParser = m_reservedOp "!" >> return Not
+
+  binOpParser :: Parser Prim_t
+  binOpParser =  (m_reservedOp "&&" >> return And)
+             <|> (m_reservedOp "||" >> return Or)
+             <|> (m_reservedOp "==" >> return Equals)
+             <|> (m_reservedOp ">" >> return Gt)
+             <|> (m_reservedOp "<" >> return Lt)
+             <|> (m_reservedOp ">=" >> return Geq)
+             <|> (m_reservedOp "<=" >> return Leq)
+             <|> (m_reservedOp "!=" >> return Neq)
+             <|> (m_reservedOp "-" >> return Minus)
+             <|> (m_reservedOp "+" >> return Plus)
+             <?> "a binary operator" 
+
+  primParser :: Parser Prim_t
+  primParser =   (m_reservedOp "&&" >> return And)
+             <|> (m_reservedOp "||" >> return Or)
+             <|> (m_reservedOp "!" >> return Not)
+             <|> (m_reservedOp "==" >> return Equals)
+             <|> (m_reservedOp ">" >> return Gt)
+             <|> (m_reservedOp "<" >> return Lt)
+             <|> (m_reservedOp ">=" >> return Geq)
+             <|> (m_reservedOp "<=" >> return Leq)
+             <|> (m_reservedOp "!=" >> return Neq)
+             <|> (m_reservedOp "-" >> return Minus)
+             <|> (m_reservedOp "+" >> return Plus)
+             <?> "a primitive operator" 
+
+  primAppParser :: Parser Expr_t
+  primAppParser =  try (do { p <- unOpParser
+                           ; exp <- valExprParser 
+                           ; return $ PrimApp p [exp]})
+               <|> try (do { exp1 <- valExprParser
+                           ; p <- binOpParser
+                           ; exp2 <- valExprParser 
+                           ; return $ PrimApp p [exp1, exp2]})
+
+  formalArgsParser :: Parser [Var_t]
+  formalArgsParser = m_parens $ m_commaSep varParser
+
+  lambdaParser :: Parser Lambda_t
+  lambdaParser = do
+    _ <- m_reservedOp "do"
+    args <- formalArgsParser
+    body <- seqStmtParser
+    _ <- m_reservedOp "end"
+    return $ mkLambda (args,body)
+
+  actualArgsParser :: Parser [ValExpr_t]
+  actualArgsParser = m_parens $ m_commaSep valExprParser
+
+  sqlParser :: Parser SQLStatement
+  sqlParser = (m_reserved "SQL" >> m_stringLiteral >>= 
+                  \x -> return $ parseSql x)
+
+  exprParser :: Parser Expr_t
+  exprParser =  do { 
+                   ; p <- primParser
+                   ; y <- actualArgsParser
+                   ; return $ PrimApp p y}
+            {- <|> try (primAppParser) -}
+            <|> liftM Lambda lambdaParser
+            <|> liftM SQL sqlParser
+                -- We need try because valExprAtomParser may consume a
+                -- valExpr, and then fail.  Error in applying this
+                -- rule may be flagged as error in applying the next
+                -- rule
+            <|> try (do { 
+                         ; x <- valExprAtomParser
+                         ; y <- actualArgsParser
+                         ; return $ App x y})
+            <|> liftM ValExpr valExprParser
+            <?> "an expression" 
+
+  txnStmtParser :: Parser Stmt_t
+  txnStmtParser = do
+    m_reserved "transaction"
+    m_reserved "do"
+    stmt <- stmtParser
+    m_reserved "end"
+    return stmt
+
+  iteStmtParser :: Parser Stmt_t
+  iteStmtParser = do {m_reserved "if"
+      ; cond <- m_parens exprParser
+      ; m_reserved "then"
+      ; ts <- stmtParser
+      ; m_reserved "else"
+      ; fs <- stmtParser
+      ; m_reserved "end"
+      ; return $ mkITE (cond,ts,fs)
+      }
+
+  assmtStmtParser :: Parser Stmt_t
+  assmtStmtParser = do
+    var <- varParser
+    m_reservedOp ":="
+    expr <- exprParser
+    return (var := expr)
+
+  assertStmtParser :: Parser Stmt_t
+  assertStmtParser = m_reserved "assert" >> 
+                      liftM Assert (m_parens exprParser)
+
+  -- It is a good practice to put the discriminative rules (rules that
+  -- begin by eating a reserved token) ahead of non-discriminative
+  -- ones.
+  stmtParser :: Parser Stmt_t
+  stmtParser =  txnStmtParser
+            <|> iteStmtParser
+            <|> assertStmtParser
+            <|> assmtStmtParser
+            <?> "a statement"
+
+  stmtSeqParser :: Parser [Stmt_t]
+  stmtSeqParser = do
+    fstStmt <- stmtParser
+    m_semi
+    restStmts <- try stmtSeqParser <|> return []
+    return $ fstStmt:restStmts
+
+  seqStmtParser :: Parser Stmt_t
+  seqStmtParser = liftM Seq $ stmtSeqParser
+
+  parseString :: String -> Either ParseError Stmt_t
+  parseString s = parse seqStmtParser "" s
