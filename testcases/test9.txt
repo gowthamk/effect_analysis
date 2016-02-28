@@ -2,19 +2,18 @@ def foo (acc,amt)
 	error := false; 
 	transaction do 
 		bal := SQL "select balance from accounts where id = 'acc.id' limit 1;";
-		assert (!usr.empty); 
-		if bal >= amt then 
+    v0 := is_empty(user);
+		assert (!v0); 
+		if (bal >= amt) then 
 			newbal := bal - amt;
-			SQL "update accounts set balance = newbal where id = 'acc.id';"
+			v1 := SQL "update accounts set balance = newbal where id = 'acc.id';";
 		else 
-			error := true 
-		end 
+			error := true;
+		end;
 	end;
-	if error then 
-		throw InsufficientBalException
-	end
+  assert(!error);
 end
 
 def bar (a)
-	a:=b
+	a:=b;
 end

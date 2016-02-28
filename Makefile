@@ -1,5 +1,5 @@
 all:
-	ghc -o parser parser.hs
+	ghc -o parser Main.hs
 
 clean:
-	rm *.hi *.o parser
+	rm *.hi *.o Main

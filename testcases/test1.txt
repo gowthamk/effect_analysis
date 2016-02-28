@@ -1,1 +1,1 @@
-def foo ( a,b ) a:=b end
+def foo ( a,b ) a:=b; end

@@ -1,1 +1,9 @@
-def foo ( a,b ) a:=b&c; b:=a|d; e:=f-g end
+def foo (a,b) 
+  a:=b && c; 
+  b:=a || d; 
+  e:=f-g; 
+end
+
+def bar(a,b) 
+  a:=b; 
+end

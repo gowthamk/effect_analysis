@@ -1,7 +1,7 @@
 -- Parser based on RFGrammar
 
 module Parser (
-  parse
+  parseString
 ) where
 
   -- Parsec rule: once a branch accepts a token then alternative
@@ -119,13 +119,13 @@ module Parser (
              <?> "a primitive operator" 
 
   primAppParser :: Parser Expr_t
-  primAppParser =  try (do { p <- unOpParser
+  primAppParser =  do { p <- unOpParser
                            ; exp <- valExprParser 
-                           ; return $ PrimApp p [exp]})
-               <|> try (do { exp1 <- valExprParser
+                           ; return $ PrimApp p [exp]}
+               <|> do { exp1 <- valExprParser
                            ; p <- binOpParser
                            ; exp2 <- valExprParser 
-                           ; return $ PrimApp p [exp1, exp2]})
+                           ; return $ PrimApp p [exp1, exp2]}
 
   formalArgsParser :: Parser [Var_t]
   formalArgsParser = m_parens $ m_commaSep varParser
@@ -146,21 +146,19 @@ module Parser (
                   \x -> return $ parseSql x)
 
   exprParser :: Parser Expr_t
-  exprParser =  do { 
+  exprParser =  {-do { 
                    ; p <- primParser
                    ; y <- actualArgsParser
-                   ; return $ PrimApp p y}
-            {- <|> try (primAppParser) -}
-            <|> liftM Lambda lambdaParser
+                   ; return $ PrimApp p y} -}
+                liftM Lambda lambdaParser
             <|> liftM SQL sqlParser
-                -- We need try because valExprAtomParser may consume a
-                -- valExpr, and then fail.  Error in applying this
-                -- rule may be flagged as error in applying the next
-                -- rule
+                -- When multiple rules consume same prefix tokens, use
+                -- "try". TODO: Change rules to push try inside.
             <|> try (do { 
                          ; x <- valExprAtomParser
                          ; y <- actualArgsParser
                          ; return $ App x y})
+            <|> try (primAppParser)
             <|> liftM ValExpr valExprParser
             <?> "an expression" 
 
@@ -168,7 +166,7 @@ module Parser (
   txnStmtParser = do
     m_reserved "transaction"
     m_reserved "do"
-    stmt <- stmtParser
+    stmt <- seqStmtParser
     m_reserved "end"
     return stmt
 
@@ -176,9 +174,9 @@ module Parser (
   iteStmtParser = do {m_reserved "if"
       ; cond <- m_parens exprParser
       ; m_reserved "then"
-      ; ts <- stmtParser
+      ; ts <- seqStmtParser
       ; m_reserved "else"
-      ; fs <- stmtParser
+      ; fs <- seqStmtParser
       ; m_reserved "end"
       ; return $ mkITE (cond,ts,fs)
       }
@@ -206,6 +204,9 @@ module Parser (
 
   stmtSeqParser :: Parser [Stmt_t]
   stmtSeqParser = do
+    -- Note: This doesn't handle the case when stmtParser succeeds,
+    -- but m_semi fails (i.e., we forgot a semi-colon). 
+    -- TODO: Fixme
     fstStmt <- stmtParser
     m_semi
     restStmts <- try stmtSeqParser <|> return []
@@ -214,5 +215,25 @@ module Parser (
   seqStmtParser :: Parser Stmt_t
   seqStmtParser = liftM Seq $ stmtSeqParser
 
-  parseString :: String -> Either ParseError Stmt_t
-  parseString s = parse seqStmtParser "" s
+  methodParser :: Parser Method_t
+  methodParser = do
+    m_reserved "def"
+    name <- m_identifier
+    args <- formalArgsParser
+    body <- seqStmtParser
+    m_reserved "end"
+    return $ mkMethod (name,args,body)
+
+  methodSeqParser :: Parser [Method_t]
+  methodSeqParser = do
+    fstMeth <- methodParser
+    restMeths <- (try methodSeqParser) <|> (eof >> return [])
+    return $ fstMeth:restMeths
+
+  programParser :: Parser Program_t
+  programParser = liftM Program_T methodSeqParser
+
+  parseString :: String -> Either ParseError Program_t
+  parseString s = parse programParser "a program" s
+
+

@@ -39,7 +39,7 @@ module ANormalAST where
                              , mArgs :: [Var_t]
                              , mBody :: Stmt_t} deriving Show
 
-  data Program_t = Program_T [Method_t]
+  data Program_t = Program_T [Method_t] deriving Show
 
   -- Builder Functions
  
