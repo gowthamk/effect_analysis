@@ -61,30 +61,32 @@ module Parser (
   boolParser =  (m_reserved "true" >> return True)
             <|> (m_reserved "false" >> return False)
 
-  fieldAssignmentParser :: Parser (Field_t,ValExprAtom_t)
+  fieldAssignmentParser :: Parser (Field_t,ValExpr_t)
   fieldAssignmentParser = do
     fld <- fieldParser
-    _ <- m_reservedOp "="
-    valExpAtom <- valExprAtomParser
+    _ <- m_reservedOp ":="
+    valExpAtom <- valExprParser
     return (fld,valExpAtom)
 
 
-  recordParser :: Parser (Record_t ValExprAtom_t)
+  recordParser :: Parser (Record_t ValExpr_t)
   recordParser = liftM Record_T (m_braces $ m_commaSep1 fieldAssignmentParser)
     
-    
-  -- No need to "try" any of the rules of valExpAtom, because the
-  -- first token consumed by each rule is unique.
-  valExprAtomParser :: Parser ValExprAtom_t
-  valExprAtomParser =  (m_integer >>= \x -> return $ ConstInt $ fromInteger x)
-                   <|> (boolParser >>= \x -> return $ ConstBool x)
-                   <|> (varParser >>= \x -> return $ Var x)
-                   <?> "a ValExprAtom"
+  dotExprParser :: Parser ValExpr_t
+  dotExprParser = do
+    obj <- varParser
+    m_reservedOp "."
+    fld <- fieldParser
+    return $ DotExp obj fld
 
+  -- No need to "try" as long as the first token consumed by the rule
+  -- is unique.
   valExprParser :: Parser ValExpr_t
-  valExprParser =  (valExprAtomParser >>= \x -> return $ Atom x)
-               <|> (recordParser >>= \x -> return $ Record x)
-               <?> "a value expression" 
+  valExprParser =  (m_integer >>= \x -> return $ ConstInt $ fromInteger x)
+               <|> (boolParser >>= \x -> return $ ConstBool x)
+               <|> try (dotExprParser) -- can consume var and fail
+               <|> (varParser >>= \x -> return $ Var x)
+               <?> "a ValExprAtom"
 
   -- There is one-to-one correspondence between reservedOp tokens and
   -- primitive operators. No "try" needed.
@@ -152,10 +154,11 @@ module Parser (
                    ; return $ PrimApp p y} -}
                 liftM Lambda lambdaParser
             <|> liftM SQL sqlParser
+            <|> liftM Record recordParser
                 -- When multiple rules consume same prefix tokens, use
                 -- "try". TODO: Change rules to push try inside.
             <|> try (do { 
-                         ; x <- valExprAtomParser
+                         ; x <- valExprParser
                          ; y <- actualArgsParser
                          ; return $ App x y})
             <|> try (primAppParser)
@@ -168,7 +171,7 @@ module Parser (
     m_reserved "do"
     stmt <- seqStmtParser
     m_reserved "end"
-    return stmt
+    return $ Transaction stmt
 
   iteStmtParser :: Parser Stmt_t
   iteStmtParser = do {m_reserved "if"
@@ -233,7 +236,7 @@ module Parser (
   programParser :: Parser Program_t
   programParser = liftM Program_T methodSeqParser
 
-  parseString :: String -> Either ParseError Program_t
-  parseString s = parse programParser "a program" s
+  parseString :: String{- filename -} -> String -> Either ParseError Program_t
+  parseString = parse programParser
 
 

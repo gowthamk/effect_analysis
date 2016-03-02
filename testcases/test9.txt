@@ -1,7 +1,7 @@
 def foo (acc,amt) 
 	error := false; 
 	transaction do 
-		bal := SQL "select balance from accounts where id = 'acc.id' limit 1;";
+		bal := SQL "SELECT microposts.* FROM microposts  WHERE user_id IN (SELECT followed_id FROM relationships WHERE follower_id = 'v0') OR user_id = 'v0' ORDER BY microposts.created_at DESC;";
     v0 := is_empty(user);
 		assert (!v0); 
 		if (bal >= amt) then 

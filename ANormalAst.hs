@@ -2,19 +2,16 @@ module ANormalAST where
 
   import SQLParser.PGSqlParser
 
-  data Var_t = Var_T String deriving Show
+  data Var_t = Var_T String deriving (Eq,Show)
 
   data Field_t = Field_T String deriving Show
 
   data Record_t a = Record_T [(Field_t,a)] deriving Show
 
-  data ValExprAtom_t = ConstInt Int
-                     | ConstBool Bool
-                     -- | ConstString String
-                     | Var Var_t deriving Show
-
-  data ValExpr_t = Atom ValExprAtom_t
-                 | Record (Record_t ValExprAtom_t) deriving Show
+  data ValExpr_t = ConstInt Int
+                 | ConstBool Bool
+                 | DotExp Var_t Field_t
+                 | Var Var_t deriving Show
 
   data Prim_t = Not | And | Or | Geq | Leq | Minus | Plus 
               | Lt | Gt | Equals | Neq deriving Show
@@ -23,9 +20,10 @@ module ANormalAST where
                            , lBody :: Stmt_t} deriving Show
 
   data Expr_t 	= ValExpr ValExpr_t
-                | App ValExprAtom_t [ValExpr_t]
+                | App ValExpr_t [ValExpr_t]
                 | PrimApp Prim_t [ValExpr_t]
                 | Lambda Lambda_t
+                | Record (Record_t ValExpr_t) 
                 | SQL SQLStatement deriving Show
 
   data Stmt_t = Transaction Stmt_t
@@ -43,6 +41,15 @@ module ANormalAST where
 
   -- Builder Functions
  
+  mkVar :: String -> Var_t
+  mkVar = Var_T
+
+  mkField :: String -> Field_t
+  mkField = Field_T
+
+  fieldOfVar :: Var_t -> Field_t
+  fieldOfVar (Var_T v) = Field_T v
+
   mkLambda :: ([Var_t],Stmt_t) -> Lambda_t
   mkLambda (args,body) = Lambda_T {lArgs = args, lBody = body}
 

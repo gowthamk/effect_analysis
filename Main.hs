@@ -8,5 +8,5 @@ module Main where
     [fname] <- getArgs
     fhandle <- openFile fname ReadMode  
     contents <- hGetContents fhandle  
-    print $ parseString contents
+    print $ parseString fname contents
     hClose fhandle

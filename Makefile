@@ -2,4 +2,4 @@ all:
 	ghc -o parser Main.hs
 
 clean:
-	rm *.hi *.o Main
+	rm *.hi *.o parser
