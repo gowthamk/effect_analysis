@@ -1,4 +1,4 @@
-module Exp where
+module ArelOfSQL where
 
   import Database.HsSqlPpp.Syntax
   -- import Database.HsSqlPpp.Internals.AstInternal
@@ -48,6 +48,7 @@ module Exp where
 
   doItSExpForId :: ScalarExpr -> String
   doItSExpForId (Identifier _ name) = doItName name
+  doItSExpForId (Parens _ se) = doItSExpForId se
   doItSExpForId x = unimplShow x
 
   doItSExpForValExpr :: ScalarExpr -> A.ValExpr_t
@@ -58,24 +59,23 @@ module Exp where
       [v] -> A.Var $ A.mkVar v
       [v,f] -> A.DotExp (A.mkVar v) (A.mkField f)
       x -> unimplShow x
+  doItSExpForValExpr (Parens _ se) = doItSExpForValExpr se
   doItSExpForValExpr x = unimplShow x
-
-  binOpOfId :: String -> A.ValExpr_t -> A.ValExpr_t -> S.Predicate
-  binOpOfId "=" = S.Eq
-  binOpOfId x = unimplShow x
 
   multiOpOfId :: String -> A.ValExpr_t -> [A.ValExpr_t] -> S.Predicate
   multiOpOfId "idin"  = S.In  
   multiOpOfId x = unimplShow x
  
+  {- doItSExpForPred -}
   doItSExpForPred :: ScalarExpr -> S.Predicate
   doItSExpForPred (BooleanLit _ True) = S.Truee 
   doItSExpForPred (BooleanLit _ False) = S.Falsee
-  doItSExpForPred (BinaryOp _ name se1 se2) = 
-    let binOp = binOpOfId $ doItName name
-        arg1 = doItSExpForValExpr se1
-        arg2 = doItSExpForValExpr se2
-    in binOp arg1 arg2
+  doItSExpForPred (BinaryOp _ name se1 se2) | (doItName name) == "=" = 
+      S.Eq (doItSExpForValExpr se1) (doItSExpForValExpr se2)
+  doItSExpForPred (BinaryOp _ name se1 se2) | ((doItName name) == "and") = 
+      S.And (doItSExpForPred se1) (doItSExpForPred se2)
+  doItSExpForPred (BinaryOp _ name se1 se2) | ((doItName name) == "or") = 
+      S.Or (doItSExpForPred se1) (doItSExpForPred se2)
   {-doItSExpForPred (SpecialOp _ name (opSExp:argSExps)) =
     case doItName name of
       "arraysub" -> let multiOp = multiOpOfId $ doItSExpForId opSExp
@@ -91,11 +91,12 @@ module Exp where
     in S.InRel lhsValExp rhsRel
   doItSExpForPred (InPredicate ann se False inList) = 
     S.Not $ doItSExpForPred (InPredicate ann se True inList)
+  doItSExpForPred (Parens _ se) = doItSExpForPred se
   doItSExpForPred se = unimplShow se
 
   doItSelectItem :: SelectItem -> A.Field_t
-  doItSelectItem x@(SelExp _ _) = unimplShow x
-  doItSelectItem (SelectItem _ se _) = A.Field_T $ doItSExpForId se
+  doItSelectItem (SelExp _ se) = A.Field_T $ doItSExpForId se
+  doItSelectItem (SelectItem _ se {- AS -}_) = A.Field_T $ doItSExpForId se
 
   -- Returns empty list if SELECT *
   doItSelectItemList :: [SelectItem] -> [A.Field_t]
