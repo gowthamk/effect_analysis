@@ -8,6 +8,7 @@ module SpecLang where
 
   data Predicate = Eq A.ValExpr_t A.ValExpr_t
                  | In A.ValExpr_t [A.ValExpr_t]
+                 | InRel A.ValExpr_t Relation
                  | And Predicate Predicate
                  | Or Predicate Predicate
                  | Not Predicate

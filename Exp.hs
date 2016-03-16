@@ -68,9 +68,6 @@ module Exp where
   multiOpOfId "idin"  = S.In  
   multiOpOfId x = unimplShow x
  
-  doItInListForValExps :: InList -> [A.ValExpr_t]
-  doItInListForValExps (InList _ seList) = map doItSExpForValExpr seList
-
   doItSExpForPred :: ScalarExpr -> S.Predicate
   doItSExpForPred (BooleanLit _ True) = S.Truee 
   doItSExpForPred (BooleanLit _ False) = S.Falsee
@@ -84,10 +81,14 @@ module Exp where
       "arraysub" -> let multiOp = multiOpOfId $ doItSExpForId opSExp
                         args = map doItSExpForValExpr argSExps
                     in multiOp args-}
-  doItSExpForPred (InPredicate _ se True inList) = 
+  doItSExpForPred (InPredicate _ se True (InList _ seList)) = 
     let lhsValExp = doItSExpForValExpr se
-        rhsValExps = doItInListForValExps inList
+        rhsValExps = map doItSExpForValExpr seList
     in S.In lhsValExp rhsValExps
+  doItSExpForPred (InPredicate _ se True (InQueryExpr _ qe)) = 
+    let lhsValExp = doItSExpForValExpr se
+        rhsRel = doItQuery qe
+    in S.InRel lhsValExp rhsRel
   doItSExpForPred (InPredicate ann se False inList) = 
     S.Not $ doItSExpForPred (InPredicate ann se True inList)
   doItSExpForPred se = unimplShow se
