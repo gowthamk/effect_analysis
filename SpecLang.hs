@@ -47,10 +47,13 @@ module SpecLang where
   mapValExpsInPred :: (A.ValExpr_t -> A.ValExpr_t) -> Predicate -> Predicate
   mapValExpsInPred f (Eq ve1 ve2) = Eq (f ve1) (f ve2)
   mapValExpsInPred f (In ve ves) = In (f ve) (map f ves)
+  {- Assumption: A query's table is not referred in nested queries-} 
+  mapValExpsInPred f (InRel ve rel) = InRel (f ve) rel 
   mapValExpsInPred f (And p1 p2) = And (mapValExpsInPred f p1) (mapValExpsInPred f p2) 
   mapValExpsInPred f (Or p1 p2) = Or (mapValExpsInPred f p1) (mapValExpsInPred f p2) 
   mapValExpsInPred f (Not p) = Not (mapValExpsInPred f p)
-  mapValExpsInPred f p = p
+  mapValExpsInPred f Truee = Truee
+  mapValExpsInPred f Falsee = Falsee
 
 
   mapQualifiedInPred :: (Var -> Var) -> Predicate -> Predicate
