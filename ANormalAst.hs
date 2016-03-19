@@ -2,7 +2,7 @@ module ANormalAST where
 
   import SQLParser.PGSqlParser
 
-  data Var_t = Var_T String deriving (Eq,Show)
+  data Var_t = Var_T String deriving (Eq,Show,Ord)
 
   data Field_t = Field_T String deriving Show
 
@@ -15,6 +15,8 @@ module ANormalAST where
 
   data Prim_t = Not | And | Or | Geq | Leq | Minus | Plus 
               | Lt | Gt | Equals | Neq deriving Show
+
+  data Type_t = TInt | TString | TBool deriving Show
 
   data Lambda_t = Lambda_T { lArgs :: [Var_t]
                            , lBody :: Stmt_t} deriving Show

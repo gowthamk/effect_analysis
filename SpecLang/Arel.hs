@@ -1,10 +1,13 @@
-module SpecLang where
+module Arel (
+  Predicate(..),
+  Relation(..),
+  qualifyPredWith,
+  substQualifiedInPred
+) where
 
   import qualified ANormalAST as A
 
   type Var = A.Var_t
-  
-  data EffKind = Rd | Wr deriving Show
 
   data Predicate = Eq A.ValExpr_t A.ValExpr_t
                  | In A.ValExpr_t [A.ValExpr_t]
@@ -23,26 +26,9 @@ module SpecLang where
   instance Show Relation where
     show (R_ name) = "R_{"++name++"}"
     show (Pi flds rel) = "π_{"++(show flds)++"}("++(show rel)++")"
-    show (Sigma predFn rel) = "σ_{\\x."++(show $ predFn $ mkVar "x")
+    show (Sigma predFn rel) = "σ_{\\x."++(show $ predFn $ A.mkVar "x")
                                ++"}("++(show rel)++")"
     show _ = "Unimpl."
-
-  data Effect = Effect { txnid :: Maybe Int,
-                         obj   :: Var,
-                         kind  :: EffKind} deriving Show
-
-  data EffSet = Const [Effect]
-              | Bind Relation (Var -> EffSet)
-              | Union EffSet EffSet
-
-  instance Show EffSet where
-    show (Const effs) = "{"++(show effs)++"}"
-    show (Bind rel effSetFn) = "{ "++(show $ effSetFn $ mkVar "x")
-                                ++"| x ∈ "++(show rel)++"}"
-    show (Union effSet1 effSet2) = (show effSet1)++" ∪ "++(show effSet2)
-
-  mkVar :: String -> Var
-  mkVar = A.Var_T
 
   mapValExpsInPred :: (A.ValExpr_t -> A.ValExpr_t) -> Predicate -> Predicate
   mapValExpsInPred f (Eq ve1 ve2) = Eq (f ve1) (f ve2)
