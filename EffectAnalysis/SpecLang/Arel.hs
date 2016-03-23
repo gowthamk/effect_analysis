@@ -1,4 +1,5 @@
-module Arel (
+module SpecLang.Arel (
+  Var,
   Predicate(..),
   Relation(..),
   qualifyPredWith,

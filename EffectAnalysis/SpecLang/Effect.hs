@@ -1,11 +1,11 @@
-module Effect (
+module SpecLang.Effect (
   EffKind(..),
   Effect(..),
   EffSet(..)
 ) where
 
   import qualified ANormalAST as A
-  import qualified Arel as R
+  import qualified SpecLang.Arel as R
 
   type Var = A.Var_t
   type Relation = R.Relation

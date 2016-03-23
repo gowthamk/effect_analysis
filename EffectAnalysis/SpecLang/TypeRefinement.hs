@@ -1,7 +1,7 @@
-module TypeRefinement where
+module SpecLang.TypeRefinement where
 
-  import qualified RelPredicate as RP
-  import qualified BasePredicate as BP
+  import qualified SpecLang.RelPredicate as RP
+  import qualified SpecLang.BasePredicate as BP
 
   data Predicate = Truee
                  | Falsee

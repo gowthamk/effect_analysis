@@ -1,4 +1,4 @@
-module BasePredicate where
+module SpecLang.BasePredicate where
 
   import qualified ANormalAST as A
 

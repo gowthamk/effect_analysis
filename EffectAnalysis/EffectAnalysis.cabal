@@ -1,0 +1,49 @@
+Name:           EffectAnalysis
+Version:        1.0.0
+Cabal-Version:  >= 1.2
+License:        BSD3
+License-File:   LICENSE
+Author:         Gowtham Kaki <http://gowthamk.github.io>
+Maintainer:     Gowtham Kaki <http://gowthamk.github.io>
+Copyright:      2016, Gowtham Kaki
+Category:       Experimental
+Synopsis:       Effect Analysis
+Description:
+  Effect Analysis
+Homepage:       http://gowthamk.github.io/Quelea
+build-type:     Simple
+
+Library
+  Build-Depends:
+    cassandra-cql >= 0.5.0.1  && < 1,
+    base > 3 && < 5,
+    bytestring,
+    z3 >= 4.0.0,
+    mtl,
+    containers,
+    parsec,
+    split,
+    hssqlppp,
+    haskell-src-exts,
+    uniplate,
+    text
+  Exposed-modules:
+    ANormalAST
+    ArelOfSQL
+    Parser
+    SpecLang.Arel
+    SpecLang.Effect
+    SpecLang.RelPredicate
+    SpecLang.BasePredicate
+    SpecLang.RefinementType
+    SpecLang.TypeRefinement
+
+  Other-modules:
+    TyEnv
+  Extensions: CPP
+  ghc-options: -w 
+
+-- Executable LWW_txn
+-- main-is:
+--    LWW_txn.hs
+--  ghc-options: -prof -XCPP -O2 -threaded -osuf p_o -hisuf p_hi -fprof-auto "-with-rtsopts=-N -p -s -h -i0.1"

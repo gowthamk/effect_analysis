@@ -2,7 +2,7 @@ module ArelOfSQL where
 
   import Database.HsSqlPpp.Syntax
   -- import Database.HsSqlPpp.Internals.AstInternal
-  import qualified SpecLang as S
+  import qualified SpecLang.Arel as R
   import qualified ANormalAST as A
   import Data.List(intercalate)
   import Data.List.Split(splitOn)
@@ -23,15 +23,15 @@ module ArelOfSQL where
   unimplShow x = unimpl $ show x 
 
 
-  doItTableRef :: TableRef -> (S.Relation, Maybe S.Var)
-  doItTableRef (Tref _ name) = (S.R_ $ doItName name, Nothing)
+  doItTableRef :: TableRef -> (R.Relation, Maybe R.Var)
+  doItTableRef (Tref _ name) = (R.R_ $ doItName name, Nothing)
   doItTableRef (TableAlias _ nmc tableRef) = 
     case doItTableRef tableRef of 
       (rel, Nothing) -> (rel, Just $ A.mkVar $ doItNameComponent nmc)
       x -> unimpl "Nested aliasing not supported"
   doItTableRef x = unimplShow x
 
-  doItTrefList :: [TableRef] -> (S.Relation, Maybe S.Var)
+  doItTrefList :: [TableRef] -> (R.Relation, Maybe R.Var)
   doItTrefList [] = error "No tables!"
   doItTrefList [tableRef] = doItTableRef tableRef
   doItTrefList x = unimpl $ "doItTrefList "++(show x)
@@ -62,20 +62,20 @@ module ArelOfSQL where
   doItSExpForValExpr (Parens _ se) = doItSExpForValExpr se
   doItSExpForValExpr x = unimplShow x
 
-  multiOpOfId :: String -> A.ValExpr_t -> [A.ValExpr_t] -> S.Predicate
-  multiOpOfId "idin"  = S.In  
+  multiOpOfId :: String -> A.ValExpr_t -> [A.ValExpr_t] -> R.Predicate
+  multiOpOfId "idin"  = R.In  
   multiOpOfId x = unimplShow x
  
   {- doItSExpForPred -}
-  doItSExpForPred :: ScalarExpr -> S.Predicate
-  doItSExpForPred (BooleanLit _ True) = S.Truee 
-  doItSExpForPred (BooleanLit _ False) = S.Falsee
+  doItSExpForPred :: ScalarExpr -> R.Predicate
+  doItSExpForPred (BooleanLit _ True) = R.Truee 
+  doItSExpForPred (BooleanLit _ False) = R.Falsee
   doItSExpForPred (BinaryOp _ name se1 se2) | (doItName name) == "=" = 
-      S.Eq (doItSExpForValExpr se1) (doItSExpForValExpr se2)
+      R.Eq (doItSExpForValExpr se1) (doItSExpForValExpr se2)
   doItSExpForPred (BinaryOp _ name se1 se2) | ((doItName name) == "and") = 
-      S.And (doItSExpForPred se1) (doItSExpForPred se2)
+      R.And (doItSExpForPred se1) (doItSExpForPred se2)
   doItSExpForPred (BinaryOp _ name se1 se2) | ((doItName name) == "or") = 
-      S.Or (doItSExpForPred se1) (doItSExpForPred se2)
+      R.Or (doItSExpForPred se1) (doItSExpForPred se2)
   {-doItSExpForPred (SpecialOp _ name (opSExp:argSExps)) =
     case doItName name of
       "arraysub" -> let multiOp = multiOpOfId $ doItSExpForId opSExp
@@ -84,13 +84,13 @@ module ArelOfSQL where
   doItSExpForPred (InPredicate _ se True (InList _ seList)) = 
     let lhsValExp = doItSExpForValExpr se
         rhsValExps = map doItSExpForValExpr seList
-    in S.In lhsValExp rhsValExps
+    in R.In lhsValExp rhsValExps
   doItSExpForPred (InPredicate _ se True (InQueryExpr _ qe)) = 
     let lhsValExp = doItSExpForValExpr se
         rhsRel = doItQuery qe
-    in S.InRel lhsValExp rhsRel
+    in R.InRel lhsValExp rhsRel
   doItSExpForPred (InPredicate ann se False inList) = 
-    S.Not $ doItSExpForPred (InPredicate ann se True inList)
+    R.Not $ doItSExpForPred (InPredicate ann se True inList)
   doItSExpForPred (Parens _ se) = doItSExpForPred se
   doItSExpForPred se = unimplShow se
 
@@ -104,24 +104,24 @@ module ArelOfSQL where
   doItSelectItemList [SelExp _ (QStar _ _)] = []
   doItSelectItemList siList = map doItSelectItem siList
 
-  doItMaybeBoolExpr :: MaybeBoolExpr -> S.Predicate
-  doItMaybeBoolExpr Nothing = S.Truee
+  doItMaybeBoolExpr :: MaybeBoolExpr -> R.Predicate
+  doItMaybeBoolExpr Nothing = R.Truee
   doItMaybeBoolExpr (Just se) = doItSExpForPred se
 
-  doItQuery :: QueryExpr -> S.Relation
+  doItQuery :: QueryExpr -> R.Relation
   doItQuery (Select { selSelectList=SelectList _ selItemList 
                     , selWhere=wherePred
                     , selTref=tRefList}) = 
     let (rel,maybeAlias) = doItTrefList tRefList
         freePred = doItMaybeBoolExpr wherePred
         pred = \x -> case maybeAlias of 
-            Nothing -> freePred `S.qualifyPredWith` x
-            Just y -> [(y,x)] `S.substQualifiedInPred` freePred 
+            Nothing -> freePred `R.qualifyPredWith` x
+            Just y -> [(y,x)] `R.substQualifiedInPred` freePred 
         flds = doItSelectItemList selItemList
-    in S.Pi flds $ S.Sigma pred rel
+    in R.Pi flds $ R.Sigma pred rel
         
 
-  doIt :: Statement -> S.Relation
+  doIt :: Statement -> R.Relation
   doIt (QueryStatement _ q) = doItQuery q
   doIt s = unimpl $ "doIt "++(show s)
 

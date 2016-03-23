@@ -1,6 +1,6 @@
-module RelPredicate where
+module SpecLang.RelPredicate where
 
-  import qualified Arel as R
+  import qualified SpecLang.Arel as R
   import qualified ANormalAST as A
 
   type Var = A.Var_t

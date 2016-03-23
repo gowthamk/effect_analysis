@@ -11,11 +11,14 @@ module TyEnv (
 
   import Prelude hiding (lookup)
   import Data.Typeable.Internal
-  import qualified ANormalAST as A
   import Control.Exception
   import qualified Data.Map.Strict as M
+  import qualified SpecLang.RefinementType as RefTy
+  import qualified ANormalAST as A
 
-  type T = M.Map A.Var_t A.Type_t
+  type Type = RefTy.Type
+  type Var = A.Var_t
+  type T = M.Map Var Type
 
   data VarNotFound_t = VarNotFound String deriving (Show, Typeable)
   instance Exception VarNotFound_t
@@ -23,19 +26,19 @@ module TyEnv (
   empty :: T
   empty = M.empty
 
-  add :: T -> (A.Var_t,A.Type_t) -> T
+  add :: T -> (Var,Type) -> T
   add m (v,t) = M.insert v t m
 
-  mem :: T -> A.Var_t -> Bool
+  mem :: T -> Var -> Bool
   mem m v = M.member v m
 
-  remove :: T -> A.Var_t -> T
+  remove :: T -> Var -> T
   remove m v = M.delete v m
 
-  lookup :: T -> A.Var_t -> Maybe A.Type_t
+  lookup :: T -> Var -> Maybe Type
   lookup m v = M.lookup v m
 
-  (!) :: T -> A.Var_t -> A.Type_t
+  (!) :: T -> Var -> Type
   m ! v = case lookup m v of
       Just t -> t
       Nothing -> throw $ VarNotFound (show v)

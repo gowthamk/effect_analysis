@@ -1,5 +1,3 @@
--- Parser based on RFGrammar
-
 module Parser (
   parseString
 ) where
