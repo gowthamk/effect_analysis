@@ -14,11 +14,14 @@ module ANormalAST where
                  | Var Var_t deriving Show
 
   data Prim_t = Not | And | Or | Geq | Leq | Minus | Plus 
-              | Lt | Gt | Equals | Neq deriving Show
+              | Lt | Gt | Equals | Neq deriving (Show,Eq)
 
-  data Type_t = TInt | TString | TBool deriving Show
+  data Type_t = TInt | TString | TBool | TUnknown
+              | TArrow ([Type_t],Type_t) 
+              {-- Experimental. To be removed --}
+              | TUser | TRel | TPost deriving (Show,Eq)
 
-  data Lambda_t = Lambda_T { lArgs :: [Var_t]
+  data Lambda_t = Lambda_T { lArgs :: [(Var_t,Type_t)]
                            , lBody :: Stmt_t} deriving Show
 
   data Expr_t 	= ValExpr ValExpr_t
@@ -36,7 +39,7 @@ module ANormalAST where
               | Seq [Stmt_t] deriving Show
 
   data Method_t 	= Method_T { mName :: String
-                             , mArgs :: [Var_t]
+                             , mArgs :: [(Var_t,Type_t)]
                              , mBody :: Stmt_t} deriving Show
 
   data Program_t = Program_T [Method_t] deriving Show
@@ -52,11 +55,17 @@ module ANormalAST where
   fieldOfVar :: Var_t -> Field_t
   fieldOfVar (Var_T v) = Field_T v
 
-  mkLambda :: ([Var_t],Stmt_t) -> Lambda_t
+  mkLambda :: ([(Var_t,Type_t)],Stmt_t) -> Lambda_t
   mkLambda (args,body) = Lambda_T {lArgs = args, lBody = body}
 
-  mkMethod :: (String, [Var_t], Stmt_t) -> Method_t
+  mkMethod :: (String, [(Var_t,Type_t)], Stmt_t) -> Method_t
   mkMethod (v,args,stmt) = Method_T {mName = v, mArgs = args, mBody=stmt}
 
   mkITE :: (Expr_t, Stmt_t, Stmt_t) -> Stmt_t
   mkITE (boolExp,ts,fs) = ITE boolExp ts fs
+
+  (-->) :: Type_t -> Type_t -> Type_t
+  t1 --> t2 = TArrow ([t1],t2)
+
+  substInExpr :: [(Var_t,ValExpr_t)] -> Expr_t -> Expr_t  
+  substInExpr substs expr = error "Unimpl."

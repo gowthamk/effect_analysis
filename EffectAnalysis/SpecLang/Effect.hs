@@ -1,7 +1,12 @@
 module SpecLang.Effect (
   EffKind(..),
   Effect(..),
-  EffSet(..)
+  EffSet(..),
+  emptySet,
+  singletonSet,
+  simple,
+  mkBindSet,
+  setUnion
 ) where
 
   import qualified ANormalAST as A
@@ -26,3 +31,17 @@ module SpecLang.Effect (
                                 ++"| x ∈ "++(show rel)++"}"
     show (Union effSet1 effSet2) = (show effSet1)++" ∪ "++(show effSet2)
 
+  emptySet :: EffSet
+  emptySet = Const []
+
+  singletonSet :: Effect -> EffSet
+  singletonSet e = Const [e]
+
+  simple :: (Var,EffKind) -> Effect
+  simple (v,k) = Effect {txnid = Nothing, obj = v, kind = k}
+
+  mkBindSet :: Relation -> (Var -> EffSet) -> EffSet
+  mkBindSet = Bind
+
+  setUnion :: (EffSet,EffSet) -> EffSet
+  setUnion (s1,s2) = Union s1 s2

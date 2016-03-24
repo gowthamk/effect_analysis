@@ -26,11 +26,12 @@ Library
     hssqlppp,
     haskell-src-exts,
     uniplate,
-    text
+    text,
+    transformers
   Exposed-modules:
     ANormalAST
     ArelOfSQL
-    Parser
+    -- Parser
     SpecLang.Arel
     SpecLang.Effect
     SpecLang.RelPredicate
@@ -40,6 +41,8 @@ Library
 
   Other-modules:
     TyEnv
+    Exp
+    Main
   Extensions: CPP
   ghc-options: -w 
 

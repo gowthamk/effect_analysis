@@ -6,7 +6,8 @@ module TyEnv (
   add,
   remove,
   lookup,
-  mem
+  mem,
+  (!)
 ) where
 
   import Prelude hiding (lookup)

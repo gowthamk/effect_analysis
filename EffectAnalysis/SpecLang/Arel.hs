@@ -3,7 +3,8 @@ module SpecLang.Arel (
   Predicate(..),
   Relation(..),
   qualifyPredWith,
-  substQualifiedInPred
+  substQualifiedInPred,
+  subst
 ) where
 
   import qualified ANormalAST as A
@@ -31,6 +32,14 @@ module SpecLang.Arel (
                                ++"}("++(show rel)++")"
     show _ = "Unimpl."
 
+  instance Eq Relation where
+    r1 == r2 = False
+    {- (R_ name1) == (R_ name2) = name1 == name2
+    (Pi flds1 rel1) == (Pi flds2 rel2) = (flds1 == flds2) && (rel1 == rel2)
+    (Sigma predFn1 rel1) == (Sigma predFn2 rel2) = 
+          (predFn1 (A.mkVar "x") == predFn2 (A.mkVar "x")) && (rel1 == rel2)
+     (==) r1 r2 = False -}
+
   mapValExpsInPred :: (A.ValExpr_t -> A.ValExpr_t) -> Predicate -> Predicate
   mapValExpsInPred f (Eq ve1 ve2) = Eq (f ve1) (f ve2)
   mapValExpsInPred f (In ve ves) = In (f ve) (map f ves)
@@ -42,6 +51,16 @@ module SpecLang.Arel (
   mapValExpsInPred f Truee = Truee
   mapValExpsInPred f Falsee = Falsee
 
+  mapVarsInPred :: (Var -> A.ValExpr_t) -> Predicate -> Predicate
+  mapVarsInPred f pred = mapValExpsInPred doIt pred
+    where doIt (A.Var v) = f v
+          doIt ve = ve
+
+  substInPred :: [(Var,A.ValExpr_t)] -> Predicate -> Predicate
+  substInPred substs pred = mapVarsInPred doSubst pred
+    where doSubst v = case lookup v substs of 
+                              Nothing -> A.Var v
+                              Just valExp -> valExp
 
   mapQualifiedInPred :: (Var -> Var) -> Predicate -> Predicate
   mapQualifiedInPred mapf pred = mapValExpsInPred mapg pred
@@ -60,3 +79,14 @@ module SpecLang.Arel (
                               Nothing -> oldVar
                               Just newVar -> newVar
 
+  mapVars :: (Var -> A.ValExpr_t) -> Relation -> Relation
+  mapVars f (Pi flds rel) = Pi flds (mapVars f rel)
+  mapVars f (Sigma predFn rel) = 
+    Sigma (\x -> mapVarsInPred f (predFn x)) (mapVars f rel)
+  mapVars f (Join _ _ _ ) = error "mapVars for Join Unimpl."
+
+  subst :: [(Var,A.ValExpr_t)] -> Relation -> Relation
+  subst substs rel = mapVars doSubst rel
+    where doSubst v = case lookup v substs of
+                        Nothing -> A.Var v
+                        Just ve -> ve
