@@ -59,3 +59,8 @@ module SpecLang.RefinementType where
 
   dummy :: IO Type
   dummy = genVar >>= \v -> return $ Base (v,A.TUnknown,TypRef.Truee)
+
+  fromBinder :: (A.Type_t, Var -> TypRef.Predicate) -> IO Type
+  fromBinder (tyd,predFn) =do
+    bv <- genVar
+    return $ Base (bv,tyd,predFn bv)

@@ -9,6 +9,9 @@ module Exp where
   import ANormalAST
   import qualified ArelOfSQL
   import qualified TyEnv as VE
+  import qualified SpecLang.Arel as R
+  import qualified SpecLang.RelPredicate as RP
+  import qualified SpecLang.TypeRefinement as TypRef
   import qualified SpecLang.RefinementType as RefTy
   import qualified SpecLang.Effect as E
 
@@ -105,16 +108,24 @@ module Exp where
     return resTy
   tcExpr (Lambda lam) = tcLambda lam
   tcExpr (SQL sql) = 
-    let rel = ArelOfSQL.doIt sql
+    let arel = ArelOfSQL.doIt sql
         {- Write effects Unimpl. -}
-        newEffs = E.mkBindSet rel 
+        recTyD = tyDOfRecsIn arel
+        listTyD = listTyDOf recTyD
+        rmem = rmemOf recTyD
+        rmemVar = varOfStrucRel rmem
+        rmemTyD = tydOfStrucRel (listTyD, recTyD)
+        rpredFn = RP.mkSRelARelEq rmem arel
+        typRefFn = \bv -> TypRef.fromRP $ rpredFn bv
+        newEffs = E.mkBindSet arel 
             (\v -> E.singletonSet $ E.simple (v,E.Rd))
-    in do { Context {varEnv, effSet} <- get
-          ; put $ Context { varEnv = varEnv
+    in do { rmemRefTy <- liftIO $ RefTy.fromTyD rmemTyD
+          ; Context {varEnv, effSet} <- get
+          ; put $ Context { varEnv = VE.add varEnv (rmemVar,rmemRefTy)
                           , effSet = E.setUnion (effSet,newEffs)}
-          {- Appropriate typing Unimpl. -}
-          ; dummyRefTy <- liftIO $ RefTy.dummy
-          ; return dummyRefTy}
+          {- Return value is a list whose Rmem = Arel of SQL -}
+          ; listRefTy <- liftIO $ RefTy.fromBinder (listTyD,typRefFn)
+          ; return listRefTy}
   tcExpr expr = unimplShow expr
 
   tcLambda :: Lambda_t -> TC RefTy.Type
@@ -151,6 +162,31 @@ module Exp where
         substs = assert (length fArgBinds == length argBinds) $
             zipWith mkSubst fArgBinds argBinds
     in RefTy.subst substs fResTy
+
+
+  varOfStrucRel :: RP.StrucRel -> Var_t
+  varOfStrucRel (RP.R_ name) = mkVar $ "R"++name
+
+  tydOfStrucRel :: (TyD{-listTyD-},TyD{-recTyD-}) -> TyD
+  tydOfStrucRel (listTyD,recTyD) = TArrow ([listTyD,recTyD],TBool)
+
+  rmemOf :: TyD -> RP.StrucRel
+  rmemOf TPost = RP.R_ "memPost"
+  rmemOf TUser = RP.R_ "memUser"
+  rmemOf TRel = RP.R_ "memRel"
+
+  listTyDOf :: TyD -> TyD
+  listTyDOf TPost = TPostList
+  listTyDOf TUser = TUserList
+  listTyDOf TRel = TRelList
+
+  tyDOfRecsIn :: R.Relation -> TyD
+  tyDOfRecsIn (R.R_ "Micropost") = TPost
+  tyDOfRecsIn (R.R_ "User") = TUser
+  tyDOfRecsIn (R.R_ "Relationship") = TRel
+  tyDOfRecsIn (R.Pi [] rel) = tyDOfRecsIn rel
+  tyDOfRecsIn (R.Sigma _ rel) = tyDOfRecsIn rel
+  tyDOfRecsIn r = unimpl $ " tyDOfRecsIn "++(show r)
 
   (<:) :: RefTy.Type -> RefTy.Type -> Bool
   ty1 <: ty2 = ty1 == ty2

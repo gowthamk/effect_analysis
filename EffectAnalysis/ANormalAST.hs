@@ -19,7 +19,8 @@ module ANormalAST where
   data Type_t = TInt | TString | TBool | TUnknown
               | TArrow ([Type_t],Type_t) 
               {-- Experimental. To be removed --}
-              | TUser | TRel | TPost deriving (Show,Eq)
+              | TUser | TRel | TPost 
+              | TUserList | TRelList | TPostList deriving (Show,Eq)
 
   data Lambda_t = Lambda_T { lArgs :: [(Var_t,Type_t)]
                            , lBody :: Stmt_t} deriving Show
