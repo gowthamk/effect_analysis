@@ -22,6 +22,8 @@ module SpecLang.TypeRefinement where
   subst substs (Rel rp) = Rel $ RP.subst substs rp
   subst substs (Base bp) = Base $ BP.subst substs bp
   subst substs (And preds) = And $ map (subst substs) preds
+  subst substs Truee = Truee
+  subst substs Falsee = Falsee
 
   fromRP :: RP.Predicate -> Predicate
   fromRP = Rel

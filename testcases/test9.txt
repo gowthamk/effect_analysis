@@ -1,4 +1,4 @@
-def foo (acc,amt) 
+def foo (usr:User) 
 	error := false; 
 	transaction do 
 		bal := SQL "SELECT microposts.* FROM microposts  WHERE user_id IN (SELECT followed_id FROM relationships WHERE follower_id = 'v0') OR user_id = 'v0' ORDER BY microposts.created_at DESC;";
@@ -14,6 +14,6 @@ def foo (acc,amt)
   assert(!error);
 end
 
-def bar (a)
+def bar (a:User)
 	a:=b;
 end

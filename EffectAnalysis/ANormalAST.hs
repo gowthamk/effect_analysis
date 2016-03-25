@@ -53,6 +53,9 @@ module ANormalAST where
   mkField :: String -> Field_t
   mkField = Field_T
 
+  fieldName :: Field_t -> String
+  fieldName (Field_T name) = name
+
   fieldOfVar :: Var_t -> Field_t
   fieldOfVar (Var_T v) = Field_T v
 

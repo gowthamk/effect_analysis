@@ -30,7 +30,9 @@ module Parser (
     , reservedOpNames = ["!", "&&", ">", "<", ">=", "<=", "==", "-", "+", 
                          ":=", "||", "{", "}", "(", ")"]
     , reservedNames = ["true", "false", "if", "then", "else", "end", 
-        "SQL", "assert", "do", "def", "transaction"]
+        "SQL", "assert", "do", "def", "transaction", 
+        {- Following are experimental. To be removed. -}
+        "User", "Post", "Rel"]
     }
 
 
@@ -51,6 +53,19 @@ module Parser (
 
   varParser :: Parser Var_t
   varParser = liftM{-( a->b)->Ma->Mb -} Var_T m_identifier
+
+  typeParser :: Parser Type_t
+  typeParser =  (m_reserved "User" >> return TUser)
+            <|> (m_reserved "Rel" >> return TRel)
+            <|> (m_reserved "Post" >> return TPost)
+
+
+  typedVarParser :: Parser (Var_t,Type_t)
+  typedVarParser = do
+    var <-varParser
+    m_reservedOp ":"
+    tyd <- typeParser
+    return (var,tyd)
 
   fieldParser :: Parser Field_t
   fieldParser = liftM{-( a->b)->Ma->Mb -} Field_T m_identifier
@@ -127,8 +142,8 @@ module Parser (
                            ; exp2 <- valExprParser 
                            ; return $ PrimApp p [exp1, exp2]}
 
-  formalArgsParser :: Parser [Var_t]
-  formalArgsParser = m_parens $ m_commaSep varParser
+  formalArgsParser :: Parser [(Var_t,Type_t)]
+  formalArgsParser = m_parens $ m_commaSep $ typedVarParser
 
   lambdaParser :: Parser Lambda_t
   lambdaParser = do

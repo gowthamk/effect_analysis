@@ -54,6 +54,9 @@ module ArelOfSQL where
   doItSExpForValExpr :: ScalarExpr -> A.ValExpr_t
   doItSExpForValExpr (BooleanLit _ b) = A.ConstBool b
   doItSExpForValExpr (NumberLit _ nStr) = A.ConstInt $ read nStr
+  {- Currently treating all strings as program variables. 
+   - Full generality Unimpl. -}
+  doItSExpForValExpr (StringLit _ str) = A.Var $ A.mkVar str
   doItSExpForValExpr se@(Identifier _ _) = 
     case splitOn "." $ doItSExpForId se of 
       [v] -> A.Var $ A.mkVar v

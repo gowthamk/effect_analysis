@@ -1,7 +1,7 @@
 {-# Language NamedFieldPuns, RecordWildCards #-}
 module Exp where
 
-  import Control.Exception (assert)
+  import Control.Exception (assert,evaluate)
   import Control.Monad
   import Control.Monad.Trans.State
   import Control.Monad.Trans (liftIO)
@@ -91,9 +91,10 @@ module Exp where
   tcExpr (ValExpr vexp) = tcValExpr vexp
   tcExpr (App (DotExp v f) argsvexps) = do
     Context {varEnv,effSet} <- get
-    let vty = varEnv VE.! v
-        prefix = lowerFirst $ tail $ show vty
-        suffix = upperFirst $ show f
+    vty <- liftIO $ evaluate $ varEnv VE.! v
+    let vtyd = RefTy.toTyD vty
+        prefix = lowerFirst $ tail $ show vtyd
+        suffix = upperFirst $ (fieldName f)
         newFun = Var $ mkVar $ prefix++suffix
         newArgs = (Var v):argsvexps
         newExp = App newFun newArgs
@@ -102,7 +103,7 @@ module Exp where
     fRefTy <- tcValExpr fvexp 
     argTys <- mapM tcValExpr argvexps
     let argBinds = zip argvexps argTys
-    return $ doTypeCheck fRefTy argBinds
+    return $ tcApp fRefTy argBinds
   tcExpr primApp@(PrimApp _ _ ) = do
     resTy <- liftIO $ RefTy.fromPrimApp primApp
     return resTy
@@ -151,12 +152,12 @@ module Exp where
   tcValExpr (Var v) = do
     Context {varEnv,effSet} <- get
     return $ varEnv VE.! v
-  tcValExpr (DotExp _ _) = error "tcValExpr called on DotExp" 
+  tcValExpr e@(DotExp _ _) = error $ "tcValExpr called on DotExp: "++(show e) 
 
-  doTypeCheck :: RefTy.Type{-type of the function -} 
-              -> [(ValExpr_t,RefTy.Type)]{- args and types -} 
-              -> RefTy.Type{- type of the application -}
-  doTypeCheck (RefTy.Arrow (fArgBinds,fResTy)) argBinds = 
+  tcApp :: RefTy.Type{-type of the function -} 
+        -> [(ValExpr_t,RefTy.Type)]{- args and types -} 
+        -> RefTy.Type{- type of the application -}
+  tcApp (RefTy.Arrow (fArgBinds,fResTy)) argBinds = 
     let mkSubst (fArg,fArgRefty) (arg,argRefTy) = 
             assert (argRefTy <: fArgRefty) (fArg,arg){-[arg/fArg]-}
         substs = assert (length fArgBinds == length argBinds) $
@@ -181,9 +182,9 @@ module Exp where
   listTyDOf TRel = TRelList
 
   tyDOfRecsIn :: R.Relation -> TyD
-  tyDOfRecsIn (R.R_ "Micropost") = TPost
-  tyDOfRecsIn (R.R_ "User") = TUser
-  tyDOfRecsIn (R.R_ "Relationship") = TRel
+  tyDOfRecsIn (R.R_ "microposts") = TPost
+  tyDOfRecsIn (R.R_ "users") = TUser
+  tyDOfRecsIn (R.R_ "relationships") = TRel
   tyDOfRecsIn (R.Pi [] rel) = tyDOfRecsIn rel
   tyDOfRecsIn (R.Sigma _ rel) = tyDOfRecsIn rel
   tyDOfRecsIn r = unimpl $ " tyDOfRecsIn "++(show r)

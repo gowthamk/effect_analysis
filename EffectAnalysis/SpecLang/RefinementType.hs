@@ -36,6 +36,11 @@ module SpecLang.RefinementType where
     v <- genVar
     return $ Base (v,t,TypRef.Truee)
 
+  toTyD :: Type -> A.Type_t
+  toTyD (Base (_,tyd,_)) = tyd
+  toTyD (Arrow (argTyps,resTy)) = 
+    A.TArrow (map (\(_,argTyp) -> toTyD argTyp) argTyps, toTyD resTy)
+
   subst :: [(Var, A.ValExpr_t)] -> Type -> Type
   {- Assumption : bv ∉ dom(substs) -}
   subst substs (Base (bv,tyd,phi)) = Base (bv,tyd, TypRef.subst substs phi)

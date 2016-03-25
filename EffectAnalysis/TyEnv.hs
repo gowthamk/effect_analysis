@@ -10,6 +10,7 @@ module TyEnv (
   (!)
 ) where
 
+  import Debug.Trace (trace)
   import Prelude hiding (lookup)
   import Data.Typeable.Internal
   import Control.Exception
@@ -21,7 +22,7 @@ module TyEnv (
   type Var = A.Var_t
   type T = M.Map Var Type
 
-  data VarNotFound_t = VarNotFound String deriving (Show, Typeable)
+  data VarNotFound_t = VarNotFound Var deriving (Show, Typeable)
   instance Exception VarNotFound_t
 
   empty :: T
@@ -40,6 +41,6 @@ module TyEnv (
   lookup m v = M.lookup v m
 
   (!) :: T -> Var -> Type
-  m ! v = case lookup m v of
+  m ! v = trace (show v) $ case lookup m v of
       Just t -> t
-      Nothing -> throw $ VarNotFound (show v)
+      Nothing -> throw $ VarNotFound v
