@@ -22,6 +22,8 @@ module ANormalAST where
               | TUser | TRel | TPost 
               | TUserList | TRelList | TPostList deriving (Show,Eq)
 
+  data TxnId_t = GF | DU | AP | DP | AU| AF | RF deriving (Show, Eq)
+
   data Lambda_t = Lambda_T { lArgs :: [(Var_t,Type_t)]
                            , lBody :: Stmt_t} deriving Show
 
@@ -50,6 +52,9 @@ module ANormalAST where
   mkVar :: String -> Var_t
   mkVar = Var_T
 
+  varToString :: Var_t -> String
+  varToString (Var_T name) = name
+
   mkField :: String -> Field_t
   mkField = Field_T
 
@@ -58,6 +63,12 @@ module ANormalAST where
 
   fieldOfVar :: Var_t -> Field_t
   fieldOfVar (Var_T v) = Field_T v
+
+  exprOfVar :: Var_t -> Expr_t
+  exprOfVar v = ValExpr $ Var v
+
+  mkApp1 :: (Var_t,Var_t) -> Expr_t
+  mkApp1 (f,v) = App (Var f) [Var v]
 
   mkLambda :: ([(Var_t,Type_t)],Stmt_t) -> Lambda_t
   mkLambda (args,body) = Lambda_T {lArgs = args, lBody = body}
@@ -71,5 +82,20 @@ module ANormalAST where
   (-->) :: Type_t -> Type_t -> Type_t
   t1 --> t2 = TArrow ([t1],t2)
 
+  mapVarsInValExpr :: (Var_t -> ValExpr_t) -> ValExpr_t -> ValExpr_t
+  mapVarsInValExpr f (Var v) = f v
+  mapVarsInValExpr f ve = ve
+
+  mapVarsInExpr :: (Var_t -> ValExpr_t) -> Expr_t -> Expr_t
+  mapVarsInExpr f e = case e of
+    (ValExpr ve) -> ValExpr $ doItVExp ve
+    (App ve1 ve2s) -> App (doItVExp ve1) (map doItVExp ve2s)
+    (PrimApp op ves) -> PrimApp op (map doItVExp ves)
+    _ -> error $ "Unimpl. mapVarsInExpr "++(show e)
+    where doItVExp ve = mapVarsInValExpr f ve
+
   substInExpr :: [(Var_t,ValExpr_t)] -> Expr_t -> Expr_t  
-  substInExpr substs expr = error "Unimpl."
+  substInExpr substs expr = mapVarsInExpr doSubst expr
+    where doSubst v = case lookup v substs of
+                        Nothing -> Var v
+                        Just ve -> ve

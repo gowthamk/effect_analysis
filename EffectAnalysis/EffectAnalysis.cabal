@@ -41,7 +41,7 @@ Library
 
   Other-modules:
     TyEnv
-    Exp
+    TCMonad
     Main
   Extensions: CPP
   ghc-options: -w 

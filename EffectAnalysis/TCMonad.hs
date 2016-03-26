@@ -1,16 +1,19 @@
 {-# Language NamedFieldPuns, RecordWildCards #-}
-module Exp where
+module TCMonad where
 
-  import Control.Exception (assert,evaluate)
+  import Debug.Trace (trace)
+  import Control.Exception (evaluate)
   import Control.Monad
   import Control.Monad.Trans.State
   import Control.Monad.Trans (liftIO)
   import Data.Char (toLower, toUpper)
+  import Utils (assert)
   import ANormalAST
   import qualified ArelOfSQL
   import qualified TyEnv as VE
   import qualified SpecLang.Arel as R
   import qualified SpecLang.RelPredicate as RP
+  import qualified SpecLang.BasePredicate as BP
   import qualified SpecLang.TypeRefinement as TypRef
   import qualified SpecLang.RefinementType as RefTy
   import qualified SpecLang.Effect as E
@@ -18,12 +21,49 @@ module Exp where
   type TyD = Type_t
 
   data Context = Context { varEnv :: VE.T
-                         , effSet :: E.EffSet} deriving Show
+                         , effSet :: E.EffSet
+                         , method :: String
+                         , txnid  :: Maybe TxnId_t} deriving Show
 
   type TC a = StateT Context IO a
 
   mkCtx :: (VE.T, E.EffSet) -> Context
-  mkCtx (ve,effs) = Context {varEnv = ve, effSet = effs}
+  mkCtx (ve,effs) = Context {varEnv = ve, effSet = effs, method="", txnid=Nothing}
+
+  rmwVE :: (VE.T -> VE.T) -> TC ()
+  rmwVE f = do
+    Context {varEnv, effSet, method, txnid} <- get
+    let ve' = f varEnv
+    put $ Context { varEnv = ve', effSet = effSet
+                  , method = method, txnid = txnid} 
+
+  rmwEffSet :: (E.EffSet -> E.EffSet) -> TC ()
+  rmwEffSet f =  do
+    Context {varEnv, effSet, method, txnid} <- get
+    let effSet' = f effSet
+    put $ Context { varEnv = varEnv, effSet = effSet'
+                  , method = method, txnid = txnid} 
+
+  putMethod :: String -> TC ()
+  putMethod mname = do
+    Context {varEnv, effSet, txnid, ..} <- get
+    put $ Context {varEnv=varEnv, effSet=effSet, txnid=txnid, method=mname}
+
+  getCurMethod :: TC String
+  getCurMethod = do
+    Context {method, ..} <- get
+    return method
+
+  putTxnId :: TxnId_t -> TC ()
+  putTxnId newtxnid = do
+    Context {varEnv, effSet, txnid, ..} <- get
+    put $ Context { varEnv=varEnv, effSet=effSet
+                  , txnid= Just newtxnid, method=method}
+   
+  getCurTxnId :: TC (Maybe TxnId_t)
+  getCurTxnId = do
+    Context {txnid, ..} <- get
+    return txnid
 
   preludeBinds :: [(String, TyD)]
   preludeBinds = [ ("stringLength", TString --> TInt)
@@ -41,9 +81,13 @@ module Exp where
     prelude <- foldM addToVE VE.empty preludeBinds
     return $ mkCtx (prelude, E.emptySet)
     where
-      addToVE ve (name,tyd) = do
-        refTy <- RefTy.fromTyD tyd
-        return $ VE.add ve (mkVar name,refTy)
+      addToVE ve (name,tyd) = 
+        let fn = mkVar name
+            predFn = \x -> \v -> 
+                TypRef.fromBP $ (exprOfVar v) `BP.Eq` (mkApp1 (fn,x))
+        in do
+             refTy <- RefTy.arrowFromBinder1 (tyd,predFn)
+             return $ VE.add ve (mkVar name,refTy)
    
   tcBegin :: TC ()
   tcBegin = do
@@ -56,27 +100,27 @@ module Exp where
     in foldl doItMeth tcBegin meths
 
   tcMeth :: Method_t -> TC ()
-  tcMeth (Method_T {mArgs, mBody, ..}) =
+  tcMeth (Method_T {mArgs, mBody, mName, ..}) =
     let argTyds = mArgs
         argRefTysIO = mapM (\(arg,tyd) -> 
                             do { refTy <- RefTy.fromTyD tyd
                                ; return (arg,refTy)}) argTyds
     in do 
         argRefTys <- liftIO argRefTysIO
-        Context {varEnv=ve, effSet, ..} <- get
-        let ve' = foldl VE.add ve argRefTys
-        put $ mkCtx (ve',effSet)
+        rmwVE (\ve -> foldl VE.add ve argRefTys)
+        putMethod mName
         tcStmt mBody 
         return ()
 
   tcStmt :: Stmt_t -> TC RefTy.Type
-  tcStmt (Transaction stmt) = tcStmt stmt
+  tcStmt (Transaction stmt) = do
+    mname <- getCurMethod
+    putTxnId $ txnIdOfMethod mname
+    tcStmt stmt
   tcStmt (Expr expr) = tcExpr expr
   tcStmt (v := expr) = do
     refTy <- tcExpr expr
-    Context {varEnv=ve,effSet} <- get
-    let ve' = VE.add ve (v,refTy)
-    put $ mkCtx (ve',effSet)
+    rmwVE (\ve -> VE.add ve (v,refTy))
     return refTy
   tcStmt (ITE guardE tStmt fStmt) = do
     tcExpr guardE
@@ -118,15 +162,15 @@ module Exp where
         rmemTyD = tydOfStrucRel (listTyD, recTyD)
         rpredFn = RP.mkSRelARelEq rmem arel
         typRefFn = \bv -> TypRef.fromRP $ rpredFn bv
-        newEffs = E.mkBindSet arel 
-            (\v -> E.singletonSet $ E.simple (v,E.Rd))
-    in do { rmemRefTy <- liftIO $ RefTy.fromTyD rmemTyD
-          ; Context {varEnv, effSet} <- get
-          ; put $ Context { varEnv = VE.add varEnv (rmemVar,rmemRefTy)
-                          , effSet = E.setUnion (effSet,newEffs)}
+    in do rmemRefTy <- liftIO $ RefTy.fromTyD rmemTyD
+          rmwVE (\ve -> VE.add ve (rmemVar,rmemRefTy))
+          txnId <- getCurTxnId
+          let newEffs = E.mkBindSet arel 
+                (\v -> E.singletonSet $ E.simple (txnId,v,E.Rd))
+          rmwEffSet (\effSet -> E.setUnion (effSet,newEffs))
           {- Return value is a list whose Rmem = Arel of SQL -}
-          ; listRefTy <- liftIO $ RefTy.fromBinder (listTyD,typRefFn)
-          ; return listRefTy}
+          listRefTy <- liftIO $ RefTy.fromBinder (listTyD,typRefFn)
+          return listRefTy
   tcExpr expr = unimplShow expr
 
   tcLambda :: Lambda_t -> TC RefTy.Type
@@ -137,9 +181,7 @@ module Exp where
                                ; return (arg,refTy)}) argTyds
     in do 
         argRefTys <- liftIO argRefTysIO
-        Context {varEnv=ve, effSet, ..} <- get
-        let ve' = foldl VE.add ve argRefTys
-        put $ mkCtx (ve',effSet)
+        rmwVE (\ve -> foldl VE.add ve argRefTys)
         tcStmt lBody 
 
   tcValExpr :: ValExpr_t -> TC RefTy.Type
@@ -159,9 +201,15 @@ module Exp where
         -> RefTy.Type{- type of the application -}
   tcApp (RefTy.Arrow (fArgBinds,fResTy)) argBinds = 
     let mkSubst (fArg,fArgRefty) (arg,argRefTy) = 
-            assert (argRefTy <: fArgRefty) (fArg,arg){-[arg/fArg]-}
-        substs = assert (length fArgBinds == length argBinds) $
-            zipWith mkSubst fArgBinds argBinds
+            let isSub = argRefTy <: fArgRefty
+                errMsg = (show argRefTy)++" <: " ++(show fArgRefty)
+                x = assert isSub errMsg
+            in x `seq` (fArg,arg){-[arg/fArg]-}
+        areEqLen = length fArgBinds == length argBinds
+        errMsg = "length ("++(show fArgBinds)++") == length("
+                          ++(show argBinds)++")"
+        x = assert areEqLen errMsg
+        substs = x `seq` zipWith mkSubst fArgBinds argBinds
     in RefTy.subst substs fResTy
 
 
@@ -191,6 +239,16 @@ module Exp where
 
   (<:) :: RefTy.Type -> RefTy.Type -> Bool
   ty1 <: ty2 = ty1 == ty2
+
+  txnIdOfMethod :: String -> TxnId_t
+  txnIdOfMethod "getFeed" =  GF
+  txnIdOfMethod "deleteUser" =  DU
+  txnIdOfMethod "addPost" =  AP
+  txnIdOfMethod "deletePost" =  DP
+  txnIdOfMethod "addUser" =  AU
+  txnIdOfMethod "addFollower" =  AF
+  txnIdOfMethod "removeFollower" =  RF
+  txnIdOfMethod "" = error $ "Unexpected transaction outside a method"
 
   lowerFirst :: String -> String
   lowerFirst (x:xs) = (toLower x):xs

@@ -1,5 +1,6 @@
 module SpecLang.RefinementType where
 
+  import Data.List (intercalate)
   import Data.IORef
   import System.IO.Unsafe ( unsafePerformIO )
   import qualified SpecLang.BasePredicate as BP
@@ -11,7 +12,24 @@ module SpecLang.RefinementType where
   type Phi = TypRef.Predicate
 
   data Type = Base (Var, TyD, Phi)
-            | Arrow ([(Var,Type)], Type) deriving (Show,Eq)
+            | Arrow ([(Var,Type)], Type)
+
+  instance Show Type where
+    show (Base (bv,tyd,phi)) = "{ "++(A.varToString bv)++":"
+        ++(show tyd)++" | "++(show phi)++"}"
+    show (Arrow (argBinds,resTy)) = 
+      let argStrs = map (\(v,ty) -> (A.varToString v)++" : "++(show ty))
+                        argBinds
+          argStr = "("++(intercalate "," argStrs)++")"
+          resStr = show resTy
+      in argStr ++" -> "++ resStr
+
+  instance Eq Type where
+    (Base (bv1,tyd1,phi1)) == (Base (bv2,tyd2,phi2)) = 
+      let phi2' = TypRef.subst [(bv2,A.Var bv1)] phi2
+      in (tyd1 == tyd2) && (phi1 == phi2')
+    (Arrow _) == (Arrow _) = error $ "Unimpl. Arrow refty equality"
+    _ == _ = False
 
   symbase = "v_"
 
@@ -69,3 +87,10 @@ module SpecLang.RefinementType where
   fromBinder (tyd,predFn) =do
     bv <- genVar
     return $ Base (bv,tyd,predFn bv)
+
+  arrowFromBinder1 :: (A.Type_t, Var -> Var -> TypRef.Predicate) -> IO Type
+  arrowFromBinder1 (A.TArrow ([t1],t2), predFn) = do
+    x <- genVar
+    refTy1 <- fromTyD t1
+    refTy2 <- fromBinder (t2, predFn x)
+    return $ Arrow ([(x,refTy1)],refTy2)

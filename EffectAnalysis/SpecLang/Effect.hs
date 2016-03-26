@@ -17,7 +17,7 @@ module SpecLang.Effect (
   
   data EffKind = Rd | Wr deriving Show
 
-  data Effect = Effect { txnid :: Maybe Int,
+  data Effect = Effect { txnid :: Maybe A.TxnId_t,
                          obj   :: Var,
                          kind  :: EffKind} deriving Show
 
@@ -37,8 +37,8 @@ module SpecLang.Effect (
   singletonSet :: Effect -> EffSet
   singletonSet e = Const [e]
 
-  simple :: (Var,EffKind) -> Effect
-  simple (v,k) = Effect {txnid = Nothing, obj = v, kind = k}
+  simple :: (Maybe A.TxnId_t, Var, EffKind) -> Effect
+  simple (txnid,v,k) = Effect {txnid = txnid, obj = v, kind = k}
 
   mkBindSet :: Relation -> (Var -> EffSet) -> EffSet
   mkBindSet = Bind

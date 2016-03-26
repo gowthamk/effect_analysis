@@ -6,7 +6,7 @@ module Main where
   import Parser (parseString)
   import ANormalAST
   import ArelOfSQL
-  import Exp as TC
+  import TCMonad as TC
   import Control.Monad.Trans.State.Lazy (runStateT)
 
   doParse :: String -> IO Program_t
@@ -25,7 +25,7 @@ module Main where
   doTypeCheck prog = do
     initCtx <- initContext
     (_,finalCtx) <- runStateT (tcProgram prog) initCtx
-    putStrLn $ show finalCtx
+    --putStrLn $ show finalCtx
     return finalCtx
 
   main :: IO ()

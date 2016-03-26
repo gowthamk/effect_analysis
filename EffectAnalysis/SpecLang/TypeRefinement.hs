@@ -1,5 +1,6 @@
 module SpecLang.TypeRefinement where
 
+  import Data.List (intercalate)
   import qualified ANormalAST as A
   import qualified SpecLang.RelPredicate as RP
   import qualified SpecLang.BasePredicate as BP
@@ -10,7 +11,14 @@ module SpecLang.TypeRefinement where
                  | Falsee
                  | Rel RP.Predicate
                  | Base BP.Predicate
-                 | And [Predicate] deriving (Show)
+                 | And [Predicate]
+
+  instance Show Predicate where
+    show (Truee) = "True"
+    show (Falsee) = "False"
+    show (Rel rp) = show rp
+    show (Base bp) = show bp
+    show (And preds) = intercalate " ∧ " (map show preds)
 
   {- Note: Trivial implementation of Eq. ToDo: Fixme.-}
   instance Eq Predicate where
@@ -27,3 +35,6 @@ module SpecLang.TypeRefinement where
 
   fromRP :: RP.Predicate -> Predicate
   fromRP = Rel
+
+  fromBP :: BP.Predicate -> Predicate
+  fromBP = Base

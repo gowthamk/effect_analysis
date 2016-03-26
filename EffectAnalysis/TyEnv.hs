@@ -1,4 +1,4 @@
-{-# Language DeriveDataTypeable #-}
+{-# Language DeriveDataTypeable, FlexibleInstances, TypeSynonymInstances #-}
 module TyEnv (
   T,
   VarNotFound_t(..),
@@ -11,6 +11,7 @@ module TyEnv (
 ) where
 
   import Debug.Trace (trace)
+  import Data.List (intercalate)
   import Prelude hiding (lookup)
   import Data.Typeable.Internal
   import Control.Exception
@@ -20,27 +21,31 @@ module TyEnv (
 
   type Type = RefTy.Type
   type Var = A.Var_t
-  type T = M.Map Var Type
+  data T = T (M.Map Var Type)
+
+  instance Show T where
+    show (T m) = "\n[\n\t"++(intercalate "\n\t" (map toStr (M.toList m)))++"\n]\n"
+      where toStr (k,v) = (show k)++" :-> "++(show v)
 
   data VarNotFound_t = VarNotFound Var deriving (Show, Typeable)
   instance Exception VarNotFound_t
 
   empty :: T
-  empty = M.empty
+  empty = T $ M.empty
 
   add :: T -> (Var,Type) -> T
-  add m (v,t) = M.insert v t m
+  add (T m) (v,t) = T $ M.insert v t m
 
   mem :: T -> Var -> Bool
-  mem m v = M.member v m
+  mem (T m) v = M.member v m
 
   remove :: T -> Var -> T
-  remove m v = M.delete v m
+  remove (T m) v = T $ M.delete v m
 
   lookup :: T -> Var -> Maybe Type
-  lookup m v = M.lookup v m
+  lookup (T m) v = M.lookup v m
 
   (!) :: T -> Var -> Type
-  m ! v = trace (show v) $ case lookup m v of
+  (T m) ! v = case lookup (T m) v of
       Just t -> t
       Nothing -> throw $ VarNotFound v

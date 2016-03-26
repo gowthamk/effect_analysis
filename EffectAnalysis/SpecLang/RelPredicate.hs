@@ -5,12 +5,19 @@ module SpecLang.RelPredicate where
 
   type Var = A.Var_t
 
-  data Relation = R_ String deriving (Show,Eq)
+  data Relation = R_ String deriving (Eq)
+
+  instance Show Relation where
+    show (R_ name) = "R"++name
 
   type StrucRel = Relation
   
   data RelExpr = ARel R.Relation
-               | SRel (Relation,Var) deriving (Show,Eq)
+               | SRel (Relation,Var) deriving (Eq)
+
+  instance Show RelExpr where
+    show (ARel rel) = show rel
+    show (SRel (rel,v)) = (show rel)++"("++(A.varToString v)++")"
 
   data Predicate = Eq RelExpr RelExpr deriving (Show,Eq)
 
